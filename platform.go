@@ -101,6 +101,10 @@ func (p *Platform) distURL(version string) string {
 	switch {
 	case p.OS == "darwin" && version <= lastOldDarwinVersion:
 		distString += "-osx10.8"
+	case p.Arch == "386" && version >= "1.5" && (p.OS == "darwin" || p.OS == "freebsd"):
+		distString = "src"
+	case p.OS == "freebsd" && version == "1.4.2":
+		distString = "src"
 	case p.OS == "" && p.Arch == "":
 		distString = "src"
 	}

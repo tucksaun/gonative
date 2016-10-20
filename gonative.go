@@ -208,10 +208,13 @@ func getPlatform(p Platform, targetPath, version string, targetReady chan struct
 	// copy over the packages
 	targetPkgPath := filepath.Join(targetPath, "pkg", p.String())
 	srcPkgPath := filepath.Join(path, "go", "pkg", p.String())
-	err = CopyAll(targetPkgPath, srcPkgPath)
-	if err != nil {
-		errors <- err
-		return
+	if _, err = os.Stat(srcPkgPath); err == nil || !os.IsNotExist(err) {
+		lg.Warn("source package not foudn for recusrive copy", "src", srcPkgPath)
+		err = CopyAll(targetPkgPath, srcPkgPath)
+		if err != nil {
+			errors <- err
+			return
+	  }
 	}
 
 	// copy over the auto-generated z_ files

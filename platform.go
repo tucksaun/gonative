@@ -2,8 +2,10 @@ package main
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +31,7 @@ const (
 	distURL              = "https://storage.googleapis.com/golang/go%s.%s.tar.gz"
 	lastOldDistVersion   = "1.2.1"
 	lastOldDarwinVersion = "1.4.2"
+	lastSha1Version      = "1.5.2"
 )
 
 type Platform struct {
@@ -57,7 +60,7 @@ func (p *Platform) Download(version string) (path string, err error) {
 		return "", fmt.Errorf("Bad response for download (%s): %v", url, resp.StatusCode)
 	}
 
-	archive, err := download(lg, resp.Body, p.String(), checksums[url])
+	archive, err := download(lg, resp.Body, p.String(), checksums[url], version > lastSha1Version)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +119,7 @@ func (p *Platform) distURL(version string) string {
 	return s
 }
 
-func download(lg log15.Logger, rd io.Reader, name string, checksum string) (*os.File, error) {
+func download(lg log15.Logger, rd io.Reader, name string, checksum string, isSha256 bool) (*os.File, error) {
 	f, err := ioutil.TempFile(".", name+"-")
 	if err != nil {
 		return nil, err
@@ -127,7 +130,12 @@ func download(lg log15.Logger, rd io.Reader, name string, checksum string) (*os.
 			os.Remove(f.Name())
 		}
 	}()
-	sha := sha1.New()
+	var sha hash.Hash
+	if isSha256 {
+		sha = sha256.New()
+	} else {
+		sha = sha1.New()
+	}
 	wr := io.MultiWriter(f, sha)
 	if _, err := io.Copy(wr, rd); err != nil {
 		return nil, err
@@ -142,6 +150,19 @@ func download(lg log15.Logger, rd io.Reader, name string, checksum string) (*os.
 }
 
 var checksums = map[string]string{
+	"https://storage.googleapis.com/golang/go1.7.3.src.tar.gz":                     "79430a0027a09b0b3ad57e214c4c1acfdd7af290961dd08d322818895af1ef44",
+	"https://storage.googleapis.com/golang/go1.7.3.darwin-amd64.tar.gz":            "2ef310fa48b43dfed7b4ae063b5facba130ed0db95745c538dfc3e30e7c0de04",
+	"https://storage.googleapis.com/golang/go1.7.3.darwin-amd64.pkg":               "c2b0e222ab32c92283fbebea61d54c1fbd015d94654384e0fc40162a68898c22",
+	"https://storage.googleapis.com/golang/go1.7.3.freebsd-386.tar.gz":             "e3ac58b1ea8272570adb646bcf4f313d52afe453c83f155ef3f931f472261f0e",
+	"https://storage.googleapis.com/golang/go1.7.3.freebsd-amd64.tar.gz":           "78e8987603ab379c9aa1707e027e46978a26f71caf5c0df4cf3a4627570efff5",
+	"https://storage.googleapis.com/golang/go1.7.3.linux-386.tar.gz":               "d39d562c3247b11ae659afe1e131a3287c60b7de207ca5f25684c26f1c1dff5c",
+	"https://storage.googleapis.com/golang/go1.7.3.linux-amd64.tar.gz":             "508028aac0654e993564b6e2014bf2d4a9751e3b286661b0b0040046cf18028e",
+	"https://storage.googleapis.com/golang/go1.7.3.linux-armv6l.tar.gz":            "d02912d121e1455e775a5aa4ecdb2a04f8483ba846e6d2341e1f35b8e507d7b5",
+	"https://storage.googleapis.com/golang/go1.7.3.linux-x390x.tar.gz":             "cadbf9cab94c91b4e8d37884cbe4dd237f983b4c92238c0e93628c166440fb50",
+	"https://storage.googleapis.com/golang/go1.7.3.windows-386.zip":                "d0ac2d3aaa20452d0f09112f034cca1c5b8560452a45e10523af7f0a1089c792",
+	"https://storage.googleapis.com/golang/go1.7.3.windows-386.msi":                "dd2ae25fc099003f5207c6125ceb4cd9444a866d4d28084a653e178514d41727",
+	"https://storage.googleapis.com/golang/go1.7.3.windows-amd64.zip":              "9fe41313b97e2a6a703f5ae22938c7d9ac4336a128b522376c224ba97e8c7f01",
+	"https://storage.googleapis.com/golang/go1.7.3.windows-amd64.msi":              "1e73eb0c36af1b714389328a39de28254aca35956933ec84ca2d93175471f41a",
 	"https://storage.googleapis.com/golang/go1.5.2.src.tar.gz":                     "c7d78ba4df574b5f9a9bb5d17505f40c4d89b81c",
 	"https://storage.googleapis.com/golang/go1.5.2.darwin-amd64.tar.gz":            "4f30332a56e9c8a36daeeff667bab3608e4dffd2",
 	"https://storage.googleapis.com/golang/go1.5.2.darwin-amd64.pkg":               "102b4e946b7bb40f0e8aa508e41340a696ead752",
@@ -163,9 +184,9 @@ var checksums = map[string]string{
 	"https://storage.googleapis.com/golang/go1.5.1.windows-amd64.zip":              "7815772347ad3e11a096d927c65bfb15d5b0f490",
 	"https://storage.googleapis.com/golang/go1.5.1.windows-amd64.msi":              "0a439f49b546b82f85adf84a79bbf40de2b3d5ba",
 	"https://storage.googleapis.com/golang/go1.5.src.tar.gz":                       "7242bb5ae29594641c75bdc3453d5854cc0a8604",
-	"https://storage.googleapis.com/golang/go1.5.darwin-amd64.tar.gz":    		    "b269242c39739ffcf05b8d969fb9787799f48c48",
-	"https://storage.googleapis.com/golang/go1.5.darwin-amd64.pkg":       		    "0d37bb75adc6eb2ce72fc500a0584b20618abf1d",
-	"https://storage.googleapis.com/golang/go1.5.freebsd-amd64.pkg":       		    "ea81cc0c2c499a54cd44e0eea81c98a1673a6dae",
+	"https://storage.googleapis.com/golang/go1.5.darwin-amd64.tar.gz":              "b269242c39739ffcf05b8d969fb9787799f48c48",
+	"https://storage.googleapis.com/golang/go1.5.darwin-amd64.pkg":                 "0d37bb75adc6eb2ce72fc500a0584b20618abf1d",
+	"https://storage.googleapis.com/golang/go1.5.freebsd-amd64.pkg":                "ea81cc0c2c499a54cd44e0eea81c98a1673a6dae",
 	"https://storage.googleapis.com/golang/go1.5.linux-386.tar.gz":                 "bbb21e32d2f8fe97696d2bb5b29f7ff5ecd5edda",
 	"https://storage.googleapis.com/golang/go1.5.linux-amd64.tar.gz":               "5817fa4b2252afdb02e11e8b9dc1d9173ef3bd5a",
 	"https://storage.googleapis.com/golang/go1.5.windows-386.zip":                  "f5014cd70be18b79bc401f1e35c8d73062124bf0",
